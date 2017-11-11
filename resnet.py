@@ -4,6 +4,7 @@ import scipy
 import matplotlib.pyplot as plt
 from keras.applications.resnet50 import ResNet50, preprocess_input
 from keras.models import Model
+import random
 
 colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w']
 def get_ResNet():
@@ -19,14 +20,8 @@ def get_ResNet():
 def process(img):
     img = np.expand_dims(img, axis=0)
     return preprocess_input(img)
-    
-def ResNet_CAM(img, model, all_amp_layer_weights):
-    # get filtered images from convolutional output + model prediction vector
-    last_conv_output, pred_vec = model.predict(process(np.copy(img)))
-    # change dimensions of last convolutional outpu tto 7 x 7 x 2048
-    last_conv_output = np.squeeze(last_conv_output) 
-    # get model's prediction (number between 0 and 999, inclusive)
-    pred = np.argmax(pred_vec)
+
+def calc_CAM(last_conv_output, all_amp_layer_weights, pred):
     # bilinear upsampling to resize each filtered image to size of original image 
     mat_for_mult = scipy.ndimage.zoom(last_conv_output, (32, 32, 1), order=1) # dim: 224 x 224 x 2048
     # get AMP layer weights
@@ -34,7 +29,14 @@ def ResNet_CAM(img, model, all_amp_layer_weights):
     # get class activation map for object class that is predicted to be in the image
     final_output = np.dot(mat_for_mult.reshape((224*224, 2048)), amp_layer_weights).reshape(224,224) # dim: 224 x 224
     # return class activation map
-    return final_output, pred
+    return final_output
+    
+def ResNet_CAM(img, model):
+    # get filtered images from convolutional output + model prediction vector
+    last_conv_output, pred_vec = model.predict(process(np.copy(img)))
+    # change dimensions of last convolutional outpu tto 7 x 7 x 2048
+    last_conv_output = np.squeeze(last_conv_output) 
+    return last_conv_output, pred_vec.flatten()
     
 def get_bounds(out, percentile=60):
     # Get bounding box of 95+ percentile pixels
@@ -61,21 +63,28 @@ test_set = test_datagen.flow_from_directory(
 ResNet_model, all_amp_layer_weights = get_ResNet()
 
 def show_next(heatmap=True, bounds=True):
+    with open('imagenet1000_clsid_to_human.txt') as imagenet_classes_file:
+        imagenet_classes_dict = ast.literal_eval(imagenet_classes_file.read())
     fig, ax = plt.subplots()
     global img
     img = test_set.next()[0][0]
     ax.imshow(img, alpha=(0.7 if heatmap else 1.))
-    CAM, pred = ResNet_CAM(img, ResNet_model, all_amp_layer_weights)
-    if heatmap:
-        ax.imshow(CAM, cmap='jet', alpha=0.3)
-    if bounds:
-        left, up, down, right = get_bounds(CAM)
-        import matplotlib.patches as patches
-        rect = patches.Rectangle((left, up), (right-left), (down-up), linewidth=1,  edgecolor='r', facecolor='none')
-        ax.add_patch(rect)
-    
-    with open('imagenet1000_clsid_to_human.txt') as imagenet_classes_file:
-        imagenet_classes_dict = ast.literal_eval(imagenet_classes_file.read())
-        ax.set_title(imagenet_classes_dict[pred])
+    global pred_vec
+    last_conv_output, pred_vec = ResNet_CAM(img, ResNet_model)
+    for pred,confidence in enumerate(pred_vec):
+        if confidence < 0.25:
+            continue
+        CAM = calc_CAM(last_conv_output, all_amp_layer_weights, pred)
+        print('Found {} in image!'.format(imagenet_classes_dict[pred]))
+        if heatmap:
+            ax.imshow(CAM, cmap='jet', alpha=0.3)
+        if bounds:
+            left, up, down, right = get_bounds(CAM)
+            import matplotlib.patches as patches
+            color = random.choice(colors)
+            rect = patches.Rectangle((left, up), (right-left), (down-up), linewidth=1,  edgecolor=color, facecolor='none')
+            ax.add_patch(rect)
+        
+    ax.set_title('Image Localization')
     plt.show()
     

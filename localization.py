@@ -58,8 +58,20 @@ test_set = test_datagen.flow_from_directory(
         batch_size=1,
         class_mode='categorical')
 
-def show_next(bounds=True, heatmap=True):
-    img = test_set.next()[0]
+def load_image(path):
+    from PIL import Image
+    img = Image.open(path)
+    img = img.resize((64,64))
+    arr = np.asarray(img)
+    arr = arr/255.0
+    return arr
+
+def show_next(bounds=True, heatmap=True, show_image=True, image=[]):
+    if len(image) == 0:
+        img = test_set.next()[0]
+    else:
+        img = image
+        img = np.expand_dims(img, axis=0)
     global out
     pred, out = get_heatmap(img)  
     
@@ -67,7 +79,7 @@ def show_next(bounds=True, heatmap=True):
     fig, ax = plt.subplots()
     ax.imshow(img[0], alpha=(0.7 if heatmap else 1.))
     if heatmap:
-        ax.imshow(out, cmap='jet', alpha=0.3)
+        ax.imshow(out, cmap='jet', alpha=(0.3 if show_image else 1.))
     if bounds:
         left, up, down, right = get_bounds(out)
         import matplotlib.patches as patches
