@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from keras.applications.resnet50 import ResNet50, preprocess_input
 from keras.models import Model
 import random
+from PIL import Image
 
 colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'w']
 def get_ResNet():
@@ -62,12 +63,20 @@ test_set = test_datagen.flow_from_directory(
 
 ResNet_model, all_amp_layer_weights = get_ResNet()
 
-def show_next(heatmap=True, bounds=True):
+def load_image(path):
+    image = Image.open(path)
+    image = image.resize((224,224))
+    image = np.array(image, dtype=np.float64)
+    return image
+
+def show_next(heatmap=True, bounds=True, image = []):
+    if len(image) == 0:
+        img = test_set.next()[0][0]
+    else:
+        img = image
     with open('imagenet1000_clsid_to_human.txt') as imagenet_classes_file:
         imagenet_classes_dict = ast.literal_eval(imagenet_classes_file.read())
     fig, ax = plt.subplots()
-    global img
-    img = test_set.next()[0][0]
     ax.imshow(img, alpha=(0.7 if heatmap else 1.))
     global pred_vec
     last_conv_output, pred_vec = ResNet_CAM(img, ResNet_model)
