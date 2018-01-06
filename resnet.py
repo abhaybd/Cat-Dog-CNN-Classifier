@@ -77,11 +77,12 @@ def show_next(heatmap=True, bounds=True, image = []):
     with open('imagenet1000_clsid_to_human.txt') as imagenet_classes_file:
         imagenet_classes_dict = ast.literal_eval(imagenet_classes_file.read())
     fig, ax = plt.subplots()
-    ax.imshow(img, alpha=(0.7 if heatmap else 1.))
+    ax.imshow(img.copy(), alpha=(0.7 if heatmap else 1.))
     global pred_vec
     last_conv_output, pred_vec = ResNet_CAM(img, ResNet_model)
     for pred,confidence in enumerate(pred_vec):
-        if confidence < 0.25:
+        # print('Confidence: {:.2f} | Prediction: {}'.format(confidence, imagenet_classes_dict[pred]))
+        if confidence < 0.5:
             continue
         CAM = calc_CAM(last_conv_output, all_amp_layer_weights, pred)
         print('Found {} in image!'.format(imagenet_classes_dict[pred]))
